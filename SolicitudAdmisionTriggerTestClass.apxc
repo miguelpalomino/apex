@@ -1,0 +1,266 @@
+@isTest
+private class SolicitudAdmisionTriggerTestClass {
+    private static void add_lead(String status, String Programa) {
+        List<Lead> leads = new List<Lead>();
+        leads.add(new Lead(
+            Email='mytest@ealde.com',
+            FirstName='Test Name',
+            LastName='Surname',
+            Correo_electronico_opor__c='mytest@ealde.com',
+            Programa__c=Programa,
+            Email_Aplicacion__c='ealde@areainteractiva.net',
+            Phone='+34606310011',
+            Status=status
+        ));
+        insert leads;
+
+        if (status == 'A convertir') {
+            List<Database.LeadConvertResult> lcrList = LeadWrapper.convertLeads(leads);
+        }
+    }
+    static testMethod void insertSolicitudAdmision_no_lead() {
+        Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Nombre__c='Test Name',
+            Apellidos__c='Surname',
+            Programa__c='MBA Especialidad Dirección de Proyectos',
+            Pa_s__c='Spain',
+            Tel_fono__c='+34606310011',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+        sa.recalculateFormulas();
+        List<Solicitud_de_Admisi_n__c> listSa = new List<Solicitud_de_Admisi_n__c>();
+        listSa.add(sa);
+
+        List<Lead> leads = [SELECT Id, Email FROM Lead];
+        System.assertEquals(0, leads.size());
+        List<Contact> contacts = [SELECT Id, Email FROM Contact];
+        System.assertEquals(0, contacts.size());
+
+        insert listSa;
+
+        //Lead and Contact are being created
+        leads = [SELECT Id, Email FROM Lead];
+        System.assertEquals(1, leads.size());
+        System.assertEquals('mytest@ealde.com', leads[0].Email);
+
+        contacts = [SELECT Id, Email FROM Contact];
+        System.assertEquals('mytest@ealde.com', contacts[0].Email);
+        List<Solicitud_de_Admisi_n__c> solicitudAdmisions = [
+            SELECT Contacto__c
+            FROM Solicitud_de_Admisi_n__c
+        ];
+        //Check Solicitud Admision link contact
+        System.assertEquals(contacts[0].Id, solicitudAdmisions[0].Contacto__c);
+        //Opportunity created
+        List<Opportunity> opportunities = [SELECT Id, Name FROM Opportunity];
+        System.assertEquals(1, opportunities.size());
+        System.assertEquals('Test Name Surname - 1', opportunities[0].Name);
+    }
+
+    static testMethod void insertSolicitudAdmision_lead() {
+        Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Nombre__c='Test Name',
+            Apellidos__c='Surname',
+            Programa__c='MBA Especialidad Dirección de Proyectos',
+            Pa_s__c='Spain',
+            Tel_fono__c='+34606310011',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+
+        Lead lead = new Lead(
+            Email='mytest@ealde.com',
+            FirstName='Test Name',
+            LastName='Surname',
+            Correo_electronico_opor__c='mytest@ealde.com',
+            Programa__c='MGR',
+            Email_Aplicacion__c='ealde@areainteractiva.net',
+            Phone='+34606310011',
+            Status='Nulo'
+        );
+        insert lead;
+
+        insert sa;
+
+        List<Lead> leads = [SELECT Id, Programa__c, Status FROM Lead];
+        System.assertEquals(1, leads.size());
+        // Programa updated
+        System.assertEquals('MBA-DP', leads[0].Programa__c);
+        System.assertEquals('Interés', leads[0].Status);
+
+        List<Contact> contacts = [SELECT Id, Email FROM Contact];
+        System.assertEquals('mytest@ealde.com', contacts[0].Email);
+        List<Solicitud_de_Admisi_n__c> solicitudAdmisions = [
+            SELECT Contacto__c
+            FROM Solicitud_de_Admisi_n__c
+        ];
+        //Check Solicitud Admision link contact
+        System.assertEquals(contacts[0].Id, solicitudAdmisions[0].Contacto__c);
+        //Opportunity created
+        List<Opportunity> opportunities = [SELECT Id, Name FROM Opportunity];
+        System.assertEquals(1, opportunities.size());
+        System.assertEquals('Test Name Surname - 1', opportunities[0].Name);
+    }
+
+    static testMethod void insertSolicitudAdmision_converted_contact() {
+        Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Nombre__c='Test Name',
+            Apellidos__c='Surname',
+            Programa__c='MBA Especialidad Dirección de Proyectos',
+            Pa_s__c='Spain',
+            Tel_fono__c='+34606310011',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+        List<Lead> leads = new List<Lead>();
+        leads.add(new Lead(
+            Email='mytest@ealde.com',
+            FirstName='Test Name',
+            LastName='Surname',
+            Correo_electronico_opor__c='mytest@ealde.com',
+            Programa__c='MBA-DP',
+            Email_Aplicacion__c='ealde@areainteractiva.net',
+            Phone='+34606310011',
+            Status='A convertir'
+        ));
+        insert leads;
+
+        List<Database.LeadConvertResult> lcrList = LeadWrapper.convertLeads(leads);
+
+        insert sa;
+
+        List<Solicitud_de_Admisi_n__c> solicitudAdmisions = [
+            SELECT Contacto__c
+            FROM Solicitud_de_Admisi_n__c
+        ];
+
+        System.assertEquals(lcrList[0].getContactId(), solicitudAdmisions[0].Contacto__c);
+
+        Contact contact = [SELECT Id FROM Contact WHERE Email = 'mytest@ealde.com'];
+        System.assertEquals(contact.Id, solicitudAdmisions[0].Contacto__c);
+    }
+
+    static testMethod void insertSolicitudAdmision_accunt_different_programa() {
+        Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Nombre__c='Test Name',
+            Apellidos__c='Surname',
+            Programa__c='MBA Especialidad Dirección de Proyectos',
+            Pa_s__c='Spain',
+            Tel_fono__c='+34606310011',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+
+        add_lead('A Convertir', 'MDC');
+
+        insert sa;
+
+        Account account = [
+            SELECT Id, Programa__c FROM Account WHERE PersonEmail = 'mytest@ealde.com'
+        ];
+
+        System.assertEquals('MBA-DP', account.Programa__c);
+    }
+
+    static testMethod void insertSolicitudAdmision_no_opportunity() {
+        Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Nombre__c='Test Name',
+            Apellidos__c='Surname',
+            Programa__c='MBA Especialidad Dirección de Proyectos',
+            Pa_s__c='Spain',
+            Tel_fono__c='+34606310011',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+
+        add_lead('A Convertir', 'MBA-DP');
+
+        //Delete existing opportunities
+        delete [SELECT Id FROM Opportunity];
+
+        insert sa;
+
+        Account a = [SELECT Id FROM Account WHERE PersonEmail = 'mytest@ealde.com'];
+        List<Opportunity> opportunities = [SELECT Id, AccountId FROM Opportunity];
+
+        System.assertEquals(1, opportunities.size());
+        System.assertEquals(a.Id, opportunities[0].AccountId);
+    }
+
+    static testMethod void insertSolicitudAdmision_opportunity_isclosed() {
+        Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Nombre__c='Test Name',
+            Apellidos__c='Surname',
+            Programa__c='MBA Especialidad Dirección de Proyectos',
+            Pa_s__c='Spain',
+            Tel_fono__c='+34606310011',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+
+        add_lead('A Convertir', 'MBA-DP');
+
+        //Close opportunity
+        Account a = [SELECT Id FROM Account WHERE PersonEmail = 'mytest@ealde.com'];
+        Opportunity op = [SELECT Id, Probability, StageName FROM Opportunity WHERE AccountId =: a.Id];
+
+        op.Probability = 0;
+        op.StageName = 'Cerrada perdida';
+        update op;
+
+        insert sa;
+        List<Opportunity> opportunities = [
+           SELECT
+           Id, Probability
+           FROM Opportunity
+           WHERE AccountId =: a.Id
+           ORDER BY CreatedDate ASC
+        ];
+
+        System.assertEquals(2, opportunities.size());
+        System.assertEquals(0, opportunities[0].Probability);
+        System.assertEquals(60, opportunities[1].Probability);
+
+    }
+
+    static testMethod void insertSolicitudAdmision_opportunity_less_60() {
+        Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Nombre__c='Test Name',
+            Apellidos__c='Surname',
+            Programa__c='MBA Especialidad Dirección de Proyectos',
+            Pa_s__c='Spain',
+            Tel_fono__c='+34606310011',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+
+        add_lead('A Convertir', 'MBA-DP');
+
+        //Close opportunity
+        Account a = [SELECT Id FROM Account WHERE PersonEmail = 'mytest@ealde.com'];
+        Opportunity op = [SELECT Id, Probability, StageName FROM Opportunity WHERE AccountId =: a.Id];
+
+        op.Probability = 20;
+        op.StageName = 'Interés confirmado';
+        update op;
+
+        insert sa;
+        List<Opportunity> opportunities = [
+           SELECT
+           Id, Probability
+           FROM Opportunity
+           WHERE AccountId =: a.Id
+        ];
+
+        System.assertEquals(1, opportunities.size());
+        System.assertEquals(60, opportunities[0].Probability);
+    }
+}

@@ -1,0 +1,6 @@
+trigger SolicitudAdmisionTrigger on Solicitud_de_Admisi_n__c (after insert) {
+    if (Trigger.isInsert && Trigger.isAfter) {
+        // combine solicitud de admisiones with lead contacts and oportunities
+    	SolicitudAdmisionHandler.combineSolicitudAdmision(Trigger.new);
+    }
+}
