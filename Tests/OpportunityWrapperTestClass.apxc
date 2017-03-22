@@ -1,0 +1,116 @@
+@isTest
+private class OpportunityWrapperTestClass {
+    @testSetup static void setup() {
+        List<Account> accounts = new List<Account>();
+        RecordType personAccountRecordType = [
+            SELECT Id
+            FROM RecordType
+            WHERE Name='Masters' AND SObjectType = 'Account'
+        ];
+
+        for (Integer i = 0; i < 3; i++) {
+            accounts.add(new Account(
+                RecordTypeID=personAccountRecordType.Id,
+                FirstName='First ' + i,
+                LastName='Last ' + i,
+                PersonEmail='email'+ i + '@test.com',
+                Programa__c='MBA'               ));
+        }
+        insert accounts;
+    }
+
+    static Account setOportunity(Integer probability) {
+        Account a = [
+            SELECT Id, PersonEmail, Name
+            FROM Account
+            WHERE PersonEmail ='email0@test.com'
+        ];
+        Opportunity op;
+
+        if (probability == 100) {
+            op = new Opportunity(
+                AccountId=a.Id,
+                Name=a.Name + ' - 1',
+                StageName='Cerrada ganada',
+                Probability=probability,
+                CloseDate=System.today() - 1,
+                Amount=100,
+                Correo_electr_nico__c=a.PersonEmail
+            );
+        } else if (probability == 60){
+            op = new Opportunity(
+                AccountId=a.Id,
+                Name=a.Name + ' - 1',
+                StageName='Comparando',
+                Probability=probability,
+                CloseDate=System.today() + 30,
+                Correo_electr_nico__c=a.PersonEmail
+            );
+        } else {
+            op = new Opportunity(
+                AccountId=a.Id,
+                Name=a.Name + ' - 1',
+                StageName='Admisiones light',
+                Probability=probability,
+                CloseDate=System.today() + 30,
+                Correo_electr_nico__c=a.PersonEmail
+            );
+        }
+
+        insert op;
+
+        Set<String> emails = new Set<String>{'email0@test.com'};
+        Map<String, Account> account_map = AccountWrapper.accountWithOppByEmail(emails);
+
+        return account_map.get('email0@test.com');
+    }
+
+    static testMethod void addOpportunity() {
+        Account a = [SELECT Id, Name, OwnerId, PersonEmail FROM Account LIMIT 1];
+
+        Opportunity opportunity = OpportunityWrapper.addOpportunity(
+            a, true, 1
+        );
+
+        System.assertEquals('Comparando', opportunity.StageName);
+        System.assertEquals(60, opportunity.Probability);
+        System.assertEquals(a.Name + ' - 1', opportunity.Name);
+        System.assertEquals(System.today() + 30, opportunity.CloseDate);
+        System.assertEquals(a.PersonEmail, opportunity.Correo_electr_nico__c);
+        System.assertEquals(a.Id, opportunity.AccountId);
+        System.assertEquals(a.OwnerId, opportunity.OwnerId);
+        System.assert(opportunity.Oportunidad_Premium__c);
+    }
+
+    static testMethod void updateOpportunity_isPremium() {
+        Account a = setOportunity(60);
+        List<Opportunity> opportunities = OpportunityWrapper.updateOpportunity(a, True);
+
+        System.assertEquals(1, opportunities.size());
+        System.assertEquals(a.OwnerId, opportunities[0].OwnerId);
+        System.assertEquals(null, opportunities[0].Estado_Entrevista_60__c);
+        System.assertEquals(System.today() + 30, opportunities[0].CloseDate);
+        System.assertEquals(a.Name + ' - 1', opportunities[0].Name);
+        System.assert(opportunities[0].Oportunidad_Premium__c);
+    }
+    static testMethod void updateOpportunity_isClosed() {
+        Account a = setOportunity(100);
+        List<Opportunity> opportunities = OpportunityWrapper.updateOpportunity(a, True);
+
+        System.assertEquals(0, opportunities.size());
+    }
+
+    static testMethod void updateOpportunity_less_60(){
+        Account a = setOportunity(20);
+        List<Opportunity> opportunities = OpportunityWrapper.updateOpportunity(a, True);
+
+        System.assertEquals(1, opportunities.size());
+        System.assertEquals(a.OwnerId, opportunities[0].OwnerId);
+        System.assertEquals(null, opportunities[0].Estado_Entrevista_60__c);
+        System.assertEquals(System.today() + 30, opportunities[0].CloseDate);
+        System.assertEquals(a.Name + ' - 1', opportunities[0].Name);
+        System.assert(opportunities[0].Oportunidad_Premium__c);
+        System.assertEquals(60, opportunities[0].Probability);
+        System.assertEquals('Comparando', opportunities[0].StageName);
+    }
+}

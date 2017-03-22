@@ -1,0 +1,42 @@
+/*
+ * Wrapper Class for Account Object
+ */
+public without sharing class AccountWrapper {
+    /*
+     * Given a list of emails Return Map of Account by Email
+     * with a list of opportunites
+     */
+    public static Map<String, Account> accountWithOppByEmail(Set<String> listEmails) {
+        Map<String, Account> accountByEmail = new Map<String, Account>();
+
+        List<Account> accounts = [
+            SELECT
+                Id,
+                PersonContactid,
+                PersonEmail,
+                Programa__c,
+                OwnerId,
+                Name,
+                (SELECT
+                    Id,
+                    Accountid,
+                    Ownerid,
+                    CloseDate,
+                    IsClosed,
+                    Probability,
+                    StageName,
+                    Estado_Entrevista_60__c,
+                    Correo_electr_nico__c
+                 FROM Opportunities)
+            FROM Account
+            WHERE isPersonAccount = true AND personEmail IN :listEmails
+            ORDER BY LastModifiedDate ASC
+        ];
+
+        for(Account a: accounts) {
+            accountByEmail.put(a.personEmail, a);
+        }
+
+        return accountByEmail;
+    }
+}

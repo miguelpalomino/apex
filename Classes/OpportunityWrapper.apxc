@@ -1,0 +1,51 @@
+/*
+ * Wrapper Class for Opportunity Object
+ */
+public class OpportunityWrapper {
+
+   /*
+    * Given an account and boolean create Opportunity
+    */
+   public static Opportunity addOpportunity(Account account, Boolean isPremium, Integer numOpportunity) {
+        return new Opportunity(
+            StageName='Comparando',
+            Probability=60,
+            Name=account.Name + ' - ' + numOpportunity,
+            CloseDate=System.today() + 30,
+            Correo_electr_nico__c=account.PersonEmail,
+            AccountId=account.id,
+            OwnerId=account.OwnerId,
+            Oportunidad_Premium__c=isPremium
+        );
+    }
+
+    /*
+     * Given an account with a list opportunities and a boolean
+     * Return the list of opportunities updated
+     */
+    public static List<Opportunity> updateOpportunity(Account account, Boolean isPremium) {
+        List<Opportunity> listOpp = new List<Opportunity>();
+
+        for (Opportunity opp: account.Opportunities) {
+            // if opportunity is closed do nothing
+            if (opp.IsClosed) {
+                continue;
+            }
+
+            // check oportunity is less than 60%
+            if (opp.Probability < 60) {
+                opp.StageName ='Comparando';
+                opp.Probability = 60;
+            }
+            // update the opportunity
+            opp.OwnerId = account.OwnerId;
+            opp.Estado_Entrevista_60__c = null;
+            opp.CloseDate = System.today() + 30;
+            opp.Name = account.Name + ' - ' + account.Opportunities.size();
+            opp.Oportunidad_Premium__c = isPremium;
+            listOpp.add(opp);
+        }
+
+        return listOpp;
+    }
+}

@@ -1,0 +1,158 @@
+public without sharing class SolicitudAdmisionHandler  {
+    static private Integer EDADSENIOR = 25;
+
+    /*
+     * Return true if solicitud admision is Premium
+     */
+    public static Boolean isPremium(Solicitud_de_Admisi_n__c sa){
+        return (
+            sa.Desempleado__c == false
+            && sa.Propiedad_de_la_empresa_u_organizaci_n__c != 'Titularidad Pública'
+            && sa.Fecha_Nacimiento__c != null
+            && System.today().year() - sa.Fecha_Nacimiento__c.year() > EDADSENIOR
+        );
+    }
+
+    /*
+     * Combine a solicitud de admision with lead, contacts and opportunities
+     * 1. Link Solicitud Admision and Lead
+     * 2. Convert new Leads to Contacts
+     * 3. Link Solicitud Admision and Contacts
+     * 4. Create or Update Opportunity
+     */
+    public static void combineSolicitudAdmision(List<Solicitud_de_Admisi_n__c> solicitudesAdmisiones) {
+        Map<String, Lead> leadsByEmail = new Map<String, Lead>();
+        Map<String, Solicitud_de_Admisi_n__c> saByEmail = new  Map<String, Solicitud_de_Admisi_n__c>();
+        List<Lead> leadsToUpdate = new List<Lead>();
+        List<Lead> leadsToInsert = new List<Lead>();
+
+        // Sort Solicitud de Admision by email
+        for(Solicitud_de_Admisi_n__c sa:solicitudesAdmisiones) {
+            saByEmail.put(sa.Correo_electr_nico__c, sa);
+        }
+        // Get all leaders by email if they exists
+        leadsByEmail = LeadWrapper.leadByEmail(saByEmail.keySet());
+
+        //Loop for Solicitud de admisiones create or update leads by email
+        for(Solicitud_de_Admisi_n__c sa:solicitudesAdmisiones) {
+            if(leadsByEmail.containsKey(sa.Correo_electr_nico__c)){
+                // Lead exists
+                LeadWrapper.updateLead(leadsByEmail.get(sa.Correo_electr_nico__c), sa);
+                leadsToUpdate.add(leadsByEmail.get(sa.Correo_electr_nico__c));
+            }else{
+                // Create new lead and append to leadsByEmail
+                Lead l = LeadWrapper.addLead(sa);
+                leadsToInsert.add(l);
+                leadsByEmail.put(l.Email, l);
+            }
+        }
+
+        //TODO: Check if I can move that to bottom
+        // Insert new leads
+        if (!leadsToInsert.isEmpty()) {
+            insert leadsToInsert;
+        }
+        //Update leads
+        if (!leadsToUpdate.isEmpty()) {
+            update leadsToUpdate;
+        }
+
+        List<Lead> leadToConverts = new List<Lead>();
+        Map<String, Id> emailByContactId = new Map<String, Id>();
+        Map<Id, String> leadsByIdEmail = new Map<Id, String>();
+
+        // Convert all leaders to Contacts
+        // if leader already convert get contactId
+        for (Lead lead: leadsByEmail.values()){
+            if (!lead.IsConverted) {
+                leadToConverts.add(lead);
+                leadsByIdEmail.put(lead.Id, lead.Email);
+            } else {
+                emailByContactId.put(lead.Email, lead.ConvertedContactId);
+            }
+        }
+
+        List<Database.LeadConvertResult> lcrList = LeadWrapper.convertLeads(leadToConverts);
+        // Add new lead convert result by email by contact id
+        for (Database.LeadConvertResult lcr: lcrList) {
+            emailByContactId.put(leadsByIdEmail.get(lcr.getLeadID()), lcr.getContactId());
+        }
+
+        // Get accounts by email
+        Map<String, Account> accountByEmail = AccountWrapper.accountWithOppByEmail(saByEmail.keySet());
+        List<Account> accountToUpdate = new List<Account>();
+
+        // Link solicitud de Admision to Contact
+        // Update Programa on Accounts
+        List<Solicitud_de_Admisi_n__c> solicitudAdmisionToUpdate = new List<Solicitud_de_Admisi_n__c>();
+
+        // Get solicitud admision to be able update them
+        for (
+            Solicitud_de_Admisi_n__c sa:
+            [
+                SELECT
+                    Correo_electr_nico__c,
+                    Contacto__c,
+                    Equivalencia_Programa__c
+                FROM Solicitud_de_Admisi_n__c
+                WHERE Correo_electr_nico__c IN : saByEmail.keySet()
+            ]
+        ) {
+            sa.Contacto__c = emailByContactId.get(sa.Correo_electr_nico__c);
+            solicitudAdmisionToUpdate.add(sa);
+
+            Account a = accountByEmail.get(sa.Correo_electr_nico__c);
+
+            if (sa.Equivalencia_Programa__c != a.Programa__c) {
+                accountToUpdate.add(new Account(
+                    Id=a.Id,
+                    Programa__c=sa.Equivalencia_Programa__c
+                ));
+            }
+        }
+
+        // Update opportunities
+        List<Opportunity> opportunityInsert = new List<Opportunity>();
+        List<Opportunity> opportunityUpdate = new List<Opportunity>();
+
+        for (Solicitud_de_Admisi_n__c sa:solicitudesAdmisiones){
+            Account a = accountByEmail.get(sa.Correo_electr_nico__c);
+            Boolean isPremium = isPremium(sa);
+
+            if (a.Opportunities.size() > 0) {
+                List<Opportunity> oppUpdated = OpportunityWrapper.updateOpportunity(a, isPremium);
+
+                if (oppUpdated.size() > 0) {
+                    opportunityUpdate.addAll(oppUpdated);
+                } else {
+                    opportunityInsert.add(
+                        OpportunityWrapper.addOpportunity(a, isPremium, a.Opportunities.size() + 1)
+                    );
+                }
+            } else {
+                opportunityInsert.add(OpportunityWrapper.addOpportunity(a, isPremium, 1));
+            }
+        }
+
+        // Update Solicitud Admisiones
+        if (solicitudAdmisionToUpdate.size() > 0) {
+            update solicitudAdmisionToUpdate;
+        }
+
+        //Update Accounts
+        if (accountToUpdate.size() > 0) {
+            update accountToUpdate;
+        }
+
+        // Update Oportunities
+        if (opportunityUpdate.size() > 0) {
+            update opportunityUpdate;
+        }
+
+        // Insert Opportunities
+        if (opportunityInsert.size() > 0) {
+            insert opportunityInsert;
+        }
+
+    }
+}

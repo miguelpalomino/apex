@@ -1,0 +1,76 @@
+@isTest
+private class AccountWrapperTestClass {
+    @testSetup static void setup() {
+        List<Account> accounts = new List<Account>();
+        RecordType personAccountRecordType = [
+            SELECT Id
+            FROM RecordType
+            WHERE Name='Masters' AND SObjectType = 'Account'
+        ];
+
+        for (Integer i = 0; i < 3; i++) {
+            accounts.add(new Account(
+                RecordTypeID=personAccountRecordType.Id,
+                FirstName='First ' + i,
+                LastName='Last ' + i,
+                PersonEmail='email'+ i + '@test.com',
+                Programa__c='MBA'
+            ));
+        }
+        insert accounts;
+    }
+
+    static testMethod void accountWithOppByEmail_NoOpportunity() {
+        Set<String> emails = new Set<String>{'email0@test.com', 'email1@test.com'};
+
+        Map<String, Account> accountByEmail = AccountWrapper.accountWithOppByEmail(
+            emails
+        );
+
+        System.assertEquals(2, accountByEmail.size());
+        System.assert(accountByEmail.get('email1@test.com').Opportunities.isEmpty());
+
+    }
+    static testMethod void accountWithOppByEmail_Opportunity() {
+        List<Account> accounts = [SELECT Id, PersonEmail, Name FROM Account];
+        List<Opportunity> opportunities = new List<Opportunity>();
+        Set<String> emails = new Set<String>{'email0@test.com'};
+
+        for(Account a : accounts) {
+            opportunities.add(new Opportunity(
+                AccountId=a.Id,
+                Name=a.Name + ' - 1',
+                StageName='Comparando',
+                CloseDate=System.today() + 30,
+                Correo_electr_nico__c=a.PersonEmail
+            ));
+        }
+        insert opportunities;
+
+        Map<String, Account> accountByEmail = AccountWrapper.accountWithOppByEmail(
+            emails
+        );
+
+        System.assert(!accountByEmail.get('email0@test.com').Opportunities.isEmpty());
+        System.assertEquals(
+            'email0@test.com',
+            accountByEmail.get('email0@test.com').Opportunities[0].Correo_electr_nico__c
+        );
+        System.assert(!accountByEmail.get('email0@test.com').Opportunities[0].isClosed);
+        System.assertEquals(
+            60,
+            accountByEmail.get('email0@test.com').Opportunities[0].Probability
+        );
+    }
+
+    static testMethod void accountWithOppByEmail_NoFound() {
+        Set<String> emails = new Set<String>{'notfound@test.com'};
+
+        Map<String, Account> accountByEmail = AccountWrapper.accountWithOppByEmail(
+            emails
+        );
+
+        System.assertEquals(0, accountByEmail.size());
+    }
+
+}

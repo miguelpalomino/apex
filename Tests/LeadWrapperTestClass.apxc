@@ -1,0 +1,189 @@
+@isTest
+private class LeadWrapperTessClass {
+
+    @testSetup static void setup() {
+        List<Lead> leads = new List<Lead>();
+
+        for (Integer i = 0; i < 3; i++) {
+            leads.add(new Lead(
+                Email='lead_' + i + '@ealde.com',
+                FirstName='FN Lead ' + i,
+                LastName='LN Lead ' + i,
+                Correo_electronico_opor__c='lead_' + i + '@ealde.com',
+                email_aplicacion__c='ealde@areainteractiva.net'
+            ));
+        }
+
+        insert leads;
+    }
+
+    private static Solicitud_de_Admisi_n__c createSolicitudAdmision() {
+        return new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='lead@ealde.com',
+            Nombre__c='Lead Nombre',
+            Apellidos__c='Lead Appellido',
+            Programa__c='MBA Máster en Administración de Empresas',
+            Pa_s__c='España',
+            Tel_fono__c='+34606112233'
+        );
+    }
+    static testMethod void leadByEmail() {
+        Set<String> setEmails = new Set<String>{'lead_1@ealde.com', 'lead_2@ealde.com'};
+
+        Map<String, Lead> leadByEmail = LeadWrapper.leadByEmail(setEmails);
+
+        System.assertEquals(setEmails, leadByEmail.keySet());
+
+        Lead l = leadByEmail.get('lead_1@ealde.com');
+        System.assertEquals(l.FirstName, 'FN Lead 1');
+        System.assertEquals(l.LastName, 'LN Lead 1');
+    }
+
+    static testMethod void leadByEmail_NotFound() {
+        Set<String> setEmails = new Set<String>{'lead_3@ealde.com'};
+
+        Map<String, Lead> leadByEmail = LeadWrapper.leadByEmail(setEmails);
+        System.assert(leadByEmail.isEmpty());
+    }
+
+    static testMethod void leadByEmail_duplicated() {
+        Set<String> setEmails = new Set<String>{'lead_1@ealde.com'};
+        Lead l = new Lead(
+            Email='lead_1@ealde.com',
+            FirstName='FN Lead 1 Duplicated',
+            LastName='LN Lead 1 Duplicated',
+            Correo_electronico_opor__c='lead_1@ealde.com',
+            Email_Aplicacion__c='ealde@areainteractiva.net'
+        );
+        insert l;
+
+        Map<String, Lead> leadByEmail = LeadWrapper.leadByEmail(setEmails);
+
+        System.assertEquals(1, leadByEmail.size());
+        l = leadByEmail.get('lead_1@ealde.com');
+        System.assertEquals(l.FirstName, 'FN Lead 1 Duplicated');
+    }
+
+    static testMethod void addLead() {
+        Solicitud_de_Admisi_n__c sa = createSolicitudAdmision();
+        sa.recalculateFormulas();
+        Lead l = LeadWrapper.addLead(sa);
+
+        System.assertEquals(sa.Correo_electr_nico__c, l.Email);
+        System.assertEquals(sa.Nombre__c, l.FirstName);
+        System.assertEquals(sa.Apellidos__c, l.LastName);
+        System.assertEquals(sa.Correo_electr_nico__c, l.Correo_electronico_opor__c);
+        System.assertEquals(sa.Equivalencia_Programa__c, l.Programa__c);
+        System.assertEquals('MBA', l.Programa__c);
+        System.assertEquals(sa.Pa_s__c, l.Pais__c);
+        System.assertEquals('ealde@areainteractiva.net', l.Email_Aplicacion__c);
+        System.assertEquals(sa.Tel_fono__c, l.Phone);
+        System.assertEquals('A convertir', l.Status);
+    }
+
+    static testMethod void updateLead() {
+        Solicitud_de_Admisi_n__c sa = createSolicitudAdmision();
+        Lead l = [
+            SELECT Programa__c, Correo_electronico_opor__c, IsConverted
+            FROM Lead
+            WHERE Email = 'lead_1@ealde.com'
+        ];
+        LeadWrapper.updateLead(l, sa);
+
+        System.assertEquals(sa.Correo_electr_nico__c, l.Correo_electronico_opor__c);
+    }
+
+    static testMethod void updateLead_DifferentProgram() {
+        // Equivalencia__Programa__c is a dinamic value depend of sa.Programa__c
+        // on this test assuming is Equivalencia__Programa__c is null
+        Solicitud_de_Admisi_n__c sa = createSolicitudAdmision();
+        sa.recalculateFormulas();
+        Lead l = [
+            SELECT Programa__c, Correo_electronico_opor__c, IsConverted
+            FROM Lead
+            WHERE Email = 'lead_1@ealde.com'
+        ];
+        l.Programa__c = 'MBA-EB';
+        update l;
+
+        LeadWrapper.updateLead(l, sa);
+
+        System.assertEquals(sa.Equivalencia_Programa__c, 'MBA');
+        System.assertEquals(sa.Equivalencia_Programa__c, l.Programa__c);
+
+    }
+
+    static testMethod void updateLead_isConverted() {
+        Solicitud_de_Admisi_n__c sa = createSolicitudAdmision();
+        Lead l = [
+            SELECT Programa__c, Correo_electronico_opor__c, IsConverted
+            FROM Lead
+            WHERE Email = 'lead_1@ealde.com'
+        ];
+        l.Status = 'Other status';
+        update l;
+
+        LeadWrapper.updateLead(l, sa);
+        System.assertEquals('A convertir', l.Status);
+    }
+
+    static testMethod void bulk_convertLeads() {
+        List<Lead> leads = new List<Lead>();
+        List<Database.LeadConvertResult> convertedLeads;
+
+        List<String> emails = new List<String>();
+        List<Lead> myleads = [SELECT Email FROM Lead];
+
+        for(Integer i = 0; i < 101; i++) {
+            leads.add(new Lead(
+                Email='emaillead_' + i + '@email.com',
+                Firstname='first name ' + i,
+                LastName='last name ' + i,
+                Status='A convertir',
+                Correo_electronico_opor__c='emaillead_' + i + '@email.com',
+                Programa__c='MBA',
+                Pais__c='España',
+                Email_Aplicacion__c='ealde@areainteractiva.net',
+                Phone='+34606121212'
+            ));
+            emails.add('emaillead_' + i + '@email.com');
+        }
+
+        insert leads;
+
+        List<Lead> ls =[
+            select id, Firstname, LastName, Email, Programa__c, Correo_electronico_opor__c, Status
+            from Lead
+            where isConverted=:false AND Email IN:emails
+            Order by LastModifiedDate ASC
+        ];
+
+        convertedLeads = LeadWrapper.convertLeads(ls);
+
+        System.assertEquals(101, convertedLeads.size());
+
+        for (Database.LeadConvertResult lcr : convertedLeads) {
+            System.assert(lcr.isSuccess());
+        }
+
+        Lead lead = [
+            SELECT Status
+            FROM Lead
+            WHERE Id =: convertedLeads[0].getLeadID()
+            LIMIT 1
+        ];
+
+        System.assertEquals('Interés', lead.Status);
+
+        Opportunity op = [
+            SELECT Name
+            FROM Opportunity
+            WHERE Id =: convertedLeads[0].getOpportunityId()
+            LIMIT 1
+        ];
+        System.assertEquals(
+            leads[0].Firstname + leads[0].LastName + ' - 1',
+            op.Name
+        );
+    }
+}

@@ -1,0 +1,53 @@
+@isTest
+private class SolicitudAdmisionHandlerTestClass {
+    static testMethod void solicitudAdmision_isPremium() {
+         Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada',
+            Fecha_Nacimiento__c = date.newInstance(1984, 10, 7)
+        );
+
+        System.assert(SolicitudAdmisionHandler.isPremium(sa));
+    }
+
+    static testMethod void solicitudAdmisionDesempleado_No_isPremium() {
+         Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Desempleado__c=true
+        );
+
+        System.assert(!SolicitudAdmisionHandler.isPremium(sa));
+    }
+
+    static testMethod void solicitudAdmisionPropiedadPublica_No_isPremium() {
+         Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Pública'
+        );
+
+        System.assert(!SolicitudAdmisionHandler.isPremium(sa));
+    }
+
+    static testMethod void solicitudAdmisionNoSenior_No_isPremium() {
+         Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada',
+            Fecha_Nacimiento__c = date.newInstance(2015, 19, 7)
+        );
+
+        System.assert(!SolicitudAdmisionHandler.isPremium(sa));
+    }
+
+    static testMethod void solicitudAdmisionNoDate_No_isPremium() {
+         Solicitud_de_Admisi_n__c sa = new Solicitud_de_Admisi_n__c(
+            Correo_electr_nico__c='mytest@ealde.com',
+            Desempleado__c=false,
+            Propiedad_de_la_empresa_u_organizaci_n__c = 'Titularidad Privada'
+        );
+
+        System.assert(!SolicitudAdmisionHandler.isPremium(sa));
+    }
+}

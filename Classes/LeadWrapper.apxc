@@ -1,0 +1,100 @@
+/*
+ * Wrapper Class for Lead Object
+ */
+public without sharing class LeadWrapper {
+    /*
+     * Given a list of emails Return Map of Lead by Email
+     */
+    public static Map<String, Lead> leadByEmail(Set<String> listEmails) {
+        Map<String, Lead> leadByEmail = new Map<String, Lead>();
+        //Get last lead if there is more than one with the same email
+        List<Lead> leads = [
+            SELECT
+                Id,
+                Email,
+                FirstName,
+                LastName,
+                IsConverted,
+                ConvertedContactId
+            FROM Lead
+            WHERE Email IN :listEmails
+            ORDER BY LastModifiedDate ASC
+        ];
+
+        for(Lead l: leads) {
+            leadByEmail.put(l.Email, l);
+        }
+        return leadByEmail;
+    }
+
+    /*
+     * Given a Solicitud de Admision Create a lead
+     */
+    public static Lead addLead(Solicitud_de_Admisi_n__c sa) {
+        //Status A convertir is needed to setup to stop Work Flows
+        return new Lead(
+            Email=sa.Correo_electr_nico__c,
+            FirstName=sa.Nombre__c,
+            LastName=sa.Apellidos__c,
+            Correo_electronico_opor__c=sa.Correo_electr_nico__c,
+            Programa__c=sa.Equivalencia_Programa__c,
+            Pais__c=sa.Pa_s__c,
+            Email_Aplicacion__c='ealde@areainteractiva.net',
+            Phone=sa.Tel_fono__c,
+            Status='A convertir'
+        );
+    }
+
+    /*
+     * Update lead with Solicitud de admision
+     */
+    public static void updateLead(Lead lead, Solicitud_de_Admisi_n__c sa) {
+        lead.Correo_electronico_opor__c = sa.Correo_electr_nico__c;
+
+        // If different Programa Update Programa
+        if (lead.Programa__c != sa.Equivalencia_Programa__c){
+            lead.Programa__c = sa.Equivalencia_Programa__c;
+        }
+
+        // If lead not converted setup status A convertir
+        // to stop Work Flows
+        if (!lead.IsConverted) {
+          lead.Status='A convertir';
+        }
+    }
+
+    /*
+     * Given a list of leads to convert
+     * Convert and create new oportunity
+     */
+    public static List<Database.LeadConvertResult> convertLeads(List<Lead> leadToConverts){
+        List<Database.LeadConvert> leadConverts = new List<Database.LeadConvert>();
+
+        for (Lead lead : leadToConverts){
+            Database.LeadConvert lc = new Database.LeadConvert();
+            lc.setLeadId(lead.Id);
+            lc.setDoNotCreateOpportunity(false);
+            lc.setOpportunityName(lead.Firstname + lead.LastName + ' - 1');
+            lc.setConvertedStatus('Interés');
+            leadConverts.add(lc);
+        }
+
+        List<Database.LeadConvertResult> lcrList = new List<Database.LeadConvertResult>();
+
+        //Convert all leads bulk maximum 100
+        if (!leadConverts.isEmpty()){
+            for(Integer i = 0; i <= leadConverts.size()/100 ; i++){
+                list<Database.LeadConvert> tempList = new list<Database.LeadConvert>();
+                Integer startIndex = i*100;
+                Integer endIndex = ((startIndex+100) < leadConverts.size()) ? startIndex+100: leadConverts.size();
+
+                for(Integer j = startIndex; j<endIndex; j++){
+                    tempList.add(leadConverts[j]);
+                }
+                lcrList.addAll(Database.convertLead(tempList, false));
+            }
+        }
+
+        return lcrList;
+    }
+}
